@@ -205,10 +205,8 @@ Open [http://localhost:3001/login](http://localhost:3001/login)
 
 | Role | Email | Password |
 |---|---|---|
-| Admin | `admin@rbac.dev` | `Admin1234!` |
-| Manager | `manager@rbac.dev` | `Manager1234!` |
-| Agent | `agent@rbac.dev` | `Agent1234!` |
-| Customer | `customer@rbac.dev` | `Customer1234!` |
+| Admin | `admin@rbac.dev` | `Admin@1234` |
+| Manager | `manager@rbac.dev` | `Manager@1234` |
 
 ---
 
