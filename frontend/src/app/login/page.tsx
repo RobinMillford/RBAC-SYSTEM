@@ -70,10 +70,14 @@ function LoginForm() {
       await login({ email, password });
       router.push(redirectTo);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-        ?? 'Invalid credentials. Please try again.';
-      setError(Array.isArray(msg) ? msg[0] : msg);
+      const axiosErr = err as { response?: { data?: { message?: string } }; code?: string; message?: string };
+      if (!axiosErr.response) {
+        // Network error — backend is unreachable (cold start, CORS, or not deployed)
+        setError('Cannot reach the server. If this is the first request, wait 30 seconds and try again.');
+      } else {
+        const msg = axiosErr.response.data?.message ?? 'Invalid credentials. Please try again.';
+        setError(Array.isArray(msg) ? msg[0] : msg);
+      }
     } finally {
       setIsLoading(false);
     }
