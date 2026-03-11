@@ -1,0 +1,67 @@
+// backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  firstName         String?
+  lastName          String?
+  phone             String?
+  role              RoleType  @default(CUSTOMER)
+  isActive          Boolean   @default(true)
+  isBanned          Boolean   @default(false)
+  
+  // Hierarchy for Grant Ceiling 
+  managerId         String?
+  manager           User?     @relation("ManagerToStaff", fields: [managerId], references: [id])
+  staff             User[]    @relation("ManagerToStaff")
+
+  // The core of Dynamic 2.0: Direct permission atoms 
+  permissions       Permission[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  tokenHash   String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  atom        String   @unique // e.g., "users:view", "reports:export"
+  description String?
+  users       User[]
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String   // e.g., "PERMISSION_GRANT", "USER_SUSPEND"
+  targetId  String?  // The ID of the user being modified
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id])
+  payload   Json     // Store old vs new state
+  createdAt DateTime @default(now())
+}
+
+enum RoleType {
+  ADMIN
+  MANAGER
+  AGENT
+  CUSTOMER
+}

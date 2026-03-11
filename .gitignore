@@ -1,0 +1,41 @@
+# ── OS artefacts ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ──────────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+*.swp
+*.swo
+
+# ── Logs ─────────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Environment & credentials (belt-and-suspenders for the whole monorepo) ───────
+# Individual packages have their own .gitignore, but this catches anything
+# that slips through at the repo root level.
+.env
+.env.*
+!**/.env.example
+
+# ── Docker overrides (local tweaks should never be committed) ─────────────────────
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+
+# ── pnpm ─────────────────────────────────────────────────────────────────────────
+.pnpm-store/
+
+# ── Misc ─────────────────────────────────────────────────────────────────────────
+*.pid
+*.seed
+*.pid.lock
+.temp/
+.tmp/

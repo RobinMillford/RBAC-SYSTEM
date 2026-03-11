@@ -1,0 +1,55 @@
+# ── Compiled output ──────────────────────────────────────────────────────────
+/dist
+/build
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Environment & credentials (NEVER commit these) ───────────────────────────
+.env
+.env.*
+!.env.example        # keep the example template
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Test / coverage ───────────────────────────────────────────────────────────
+/coverage
+/.nyc_output
+
+# ── OS artefacts ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+
+# ── Temp ──────────────────────────────────────────────────────────────────────
+.temp
+.tmp
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+pids
+*.pid
+*.seed
+*.pid.lock
+
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+/generated/prisma

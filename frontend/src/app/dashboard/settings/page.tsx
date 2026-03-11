@@ -1,0 +1,28 @@
+import { Settings, Construction } from 'lucide-react';
+
+export default function SettingsPage() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-xl" style={{ background: '#f5f3f0' }}>
+          <Settings style={{ color: '#6b7280' }} size={22} />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-stone-900">Settings</h1>
+          <p className="text-sm text-stone-400">Platform configuration and preferences</p>
+        </div>
+      </div>
+
+      <div
+        className="rounded-2xl bg-white flex flex-col items-center justify-center h-72 gap-4"
+        style={{ border: '1px solid #ede9e4', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}
+      >
+        <Construction className="text-stone-300" size={48} />
+        <div className="text-center">
+          <p className="text-stone-700 font-semibold">Coming Soon</p>
+          <p className="text-sm text-stone-400 mt-1">The settings module is under construction.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
