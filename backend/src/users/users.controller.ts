@@ -8,32 +8,36 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
-  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { PermissionsService } from './permissions.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdatePermissionsDto } from './dto/update-permissions.dto';
+import { UsersQueryDto } from './dto/users-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../common/guards/permission.guard';
 import { RequiresPermission } from '../common/decorators/requires-permission.decorator';
-import { AuditInterceptor } from '../audit/interceptors/audit.interceptor';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, PermissionGuard)
-@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly permissionsService: PermissionsService,
+  ) {}
 
   @Get()
   @RequiresPermission('users:read')
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: UsersQueryDto) {
+    return this.usersService.findAll(query);
   }
 
   @Get(':id')
@@ -44,14 +48,12 @@ export class UsersController {
 
   @Post()
   @RequiresPermission('users:create')
-  @UseInterceptors(AuditInterceptor)
   create(@Body() dto: CreateUserDto, @Request() req: { user: JwtPayload }) {
     return this.usersService.create(req.user.sub, dto);
   }
 
   @Patch(':id')
   @RequiresPermission('users:update')
-  @UseInterceptors(AuditInterceptor)
   update(
     @Param('id', ParseUUIDPipe) targetId: string,
     @Body() dto: UpdateUserDto,
@@ -63,7 +65,6 @@ export class UsersController {
   @Patch(':id/suspend')
   @HttpCode(HttpStatus.OK)
   @RequiresPermission('users:update')
-  @UseInterceptors(AuditInterceptor)
   suspend(
     @Param('id', ParseUUIDPipe) targetId: string,
     @Request() req: { user: JwtPayload },
@@ -74,7 +75,6 @@ export class UsersController {
   @Patch(':id/reactivate')
   @HttpCode(HttpStatus.OK)
   @RequiresPermission('users:update')
-  @UseInterceptors(AuditInterceptor)
   reactivate(
     @Param('id', ParseUUIDPipe) targetId: string,
     @Request() req: { user: JwtPayload },
@@ -85,7 +85,6 @@ export class UsersController {
   @Patch(':id/ban')
   @HttpCode(HttpStatus.OK)
   @RequiresPermission('users:delete')
-  @UseInterceptors(AuditInterceptor)
   ban(
     @Param('id', ParseUUIDPipe) targetId: string,
     @Request() req: { user: JwtPayload },
@@ -96,7 +95,6 @@ export class UsersController {
   @Patch(':id/unban')
   @HttpCode(HttpStatus.OK)
   @RequiresPermission('users:delete')
-  @UseInterceptors(AuditInterceptor)
   unban(
     @Param('id', ParseUUIDPipe) targetId: string,
     @Request() req: { user: JwtPayload },
@@ -106,12 +104,11 @@ export class UsersController {
 
   @Patch(':id/permissions')
   @RequiresPermission('permissions:grant')
-  @UseInterceptors(AuditInterceptor)
   updatePermissions(
     @Param('id', ParseUUIDPipe) targetId: string,
     @Body() dto: UpdatePermissionsDto,
     @Request() req: { user: JwtPayload },
   ) {
-    return this.usersService.updatePermissions(req.user.sub, targetId, dto);
+    return this.permissionsService.updatePermissions(req.user.sub, targetId, dto);
   }
 }

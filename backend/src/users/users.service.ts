@@ -1,119 +1,75 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../common/enums/audit-action.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UpdatePermissionsDto } from './dto/update-permissions.dto';
+import { UsersQueryDto } from './dto/users-query.dto';
 import { UserResponse } from './interfaces/user-response.interface';
-
-// ─── Helper type (inlined Prisma result shape) ────────────────────────────────
-type UserWithPerms = {
-  id: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  phone: string | null;
-  role: string;
-  isActive: boolean;
-  isBanned: boolean;
-  managerId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  permissions: { atom: string }[];
-};
+import { UsersRepository, PaginatedUsers } from './users.repository';
+import { mapUser } from './utils/map-user';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly usersRepo: UsersRepository,
     private readonly auditService: AuditService,
   ) {}
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-
-  private mapUser(user: UserWithPerms): UserResponse {
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      role: user.role,
-      isActive: user.isActive,
-      isBanned: user.isBanned,
-      managerId: user.managerId,
-      permissions: user.permissions.map((p) => p.atom),
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
-  }
-
-  private includePerms = { permissions: true } as const;
-
   // ─── Read ──────────────────────────────────────────────────────────────────
 
-  async findAll(): Promise<UserResponse[]> {
-    const users = await this.prisma.user.findMany({
-      include: this.includePerms,
-      orderBy: { createdAt: 'desc' },
-    });
-    return users.map((u) => this.mapUser(u));
+  async findAll(
+    query: UsersQueryDto,
+  ): Promise<Omit<PaginatedUsers, 'data'> & { data: UserResponse[] }> {
+    const result = await this.usersRepo.findAll(query);
+    return { ...result, data: result.data.map(mapUser) };
   }
 
   async findById(id: string): Promise<UserResponse> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      include: this.includePerms,
-    });
+    const user = await this.usersRepo.findById(id);
     if (!user) throw new NotFoundException(`User ${id} not found.`);
-    return this.mapUser(user);
+    return mapUser(user);
   }
 
   // ─── Create ────────────────────────────────────────────────────────────────
 
   async create(actorId: string, dto: CreateUserDto): Promise<UserResponse> {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+    const existing = await this.usersRepo.findByEmail(dto.email);
     if (existing) throw new ConflictException('Email already in use.');
 
     if (dto.managerId) {
-      const manager = await this.prisma.user.findUnique({
-        where: { id: dto.managerId },
-      });
+      const manager = await this.usersRepo.findById(dto.managerId);
       if (!manager) throw new NotFoundException('Manager not found.');
     }
 
     const hashed = await bcrypt.hash(dto.password, 12);
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        password: hashed,
-        role: dto.role,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        phone: dto.phone,
-        managerId: dto.managerId,
-      },
-      include: this.includePerms,
+    const user = await this.usersRepo.create({
+      email: dto.email,
+      password: hashed,
+      role: dto.role,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      phone: dto.phone,
+      ...(dto.managerId && { manager: { connect: { id: dto.managerId } } }),
     });
 
     await this.auditService.log({
-      action: 'USER_CREATE',
+      action: AuditAction.USER_CREATE,
       actorId,
       targetId: user.id,
-      payload: { email: user.email, role: user.role } as Prisma.InputJsonValue,
+      payload: { email: user.email, role: user.role },
     });
 
-    return this.mapUser(user);
+    this.logger.log(`User created: ${user.id} by actor ${actorId}`);
+    return mapUser(user);
   }
 
   // ─── Update ────────────────────────────────────────────────────────────────
@@ -123,39 +79,32 @@ export class UsersService {
     targetId: string,
     dto: UpdateUserDto,
   ): Promise<UserResponse> {
-    const existing = await this.prisma.user.findUnique({
-      where: { id: targetId },
-    });
+    const existing = await this.usersRepo.findById(targetId);
     if (!existing) throw new NotFoundException(`User ${targetId} not found.`);
 
     if (dto.email && dto.email !== existing.email) {
-      const conflict = await this.prisma.user.findUnique({
-        where: { email: dto.email },
-      });
+      const conflict = await this.usersRepo.findByEmail(dto.email);
       if (conflict) throw new ConflictException('Email already in use.');
     }
 
-    const user = await this.prisma.user.update({
-      where: { id: targetId },
-      data: {
-        ...(dto.email && { email: dto.email }),
-        ...(dto.role && { role: dto.role }),
-        ...(dto.firstName !== undefined && { firstName: dto.firstName }),
-        ...(dto.lastName !== undefined && { lastName: dto.lastName }),
-        ...(dto.phone !== undefined && { phone: dto.phone }),
-        ...(dto.managerId !== undefined && { managerId: dto.managerId }),
-      },
-      include: this.includePerms,
+    const user = await this.usersRepo.update(targetId, {
+      ...(dto.email && { email: dto.email }),
+      ...(dto.role && { role: dto.role }),
+      ...(dto.firstName !== undefined && { firstName: dto.firstName }),
+      ...(dto.lastName !== undefined && { lastName: dto.lastName }),
+      ...(dto.phone !== undefined && { phone: dto.phone }),
+      ...(dto.managerId !== undefined && { managerId: dto.managerId }),
     });
 
     await this.auditService.log({
-      action: 'USER_UPDATE',
+      action: AuditAction.USER_UPDATE,
       actorId,
       targetId,
-      payload: { changes: dto } as unknown as Prisma.InputJsonValue,
+      payload: { changes: dto as Record<string, unknown> },
     });
 
-    return this.mapUser(user);
+    this.logger.log(`User updated: ${targetId} by actor ${actorId}`);
+    return mapUser(user);
   }
 
   // ─── Suspend / Reactivate ──────────────────────────────────────────────────
@@ -164,25 +113,25 @@ export class UsersService {
     if (actorId === targetId) {
       throw new BadRequestException('You cannot suspend yourself.');
     }
-    const user = await this._setActive(targetId, false);
+    const user = await this.usersRepo.setActive(targetId, false);
     await this.auditService.log({
-      action: 'USER_SUSPEND',
+      action: AuditAction.USER_SUSPEND,
       actorId,
       targetId,
-      payload: {} as Prisma.InputJsonValue,
+      payload: {},
     });
-    return user;
+    return mapUser(user);
   }
 
   async reactivate(actorId: string, targetId: string): Promise<UserResponse> {
-    const user = await this._setActive(targetId, true);
+    const user = await this.usersRepo.setActive(targetId, true);
     await this.auditService.log({
-      action: 'USER_REACTIVATE',
+      action: AuditAction.USER_REACTIVATE,
       actorId,
       targetId,
-      payload: {} as Prisma.InputJsonValue,
+      payload: {},
     });
-    return user;
+    return mapUser(user);
   }
 
   // ─── Ban / Unban ───────────────────────────────────────────────────────────
@@ -191,119 +140,24 @@ export class UsersService {
     if (actorId === targetId) {
       throw new BadRequestException('You cannot ban yourself.');
     }
-    const user = await this._setBanned(targetId, true);
+    const user = await this.usersRepo.setBanned(targetId, true);
     await this.auditService.log({
-      action: 'USER_BAN',
+      action: AuditAction.USER_BAN,
       actorId,
       targetId,
-      payload: {} as Prisma.InputJsonValue,
+      payload: {},
     });
-    return user;
+    return mapUser(user);
   }
 
   async unban(actorId: string, targetId: string): Promise<UserResponse> {
-    const user = await this._setBanned(targetId, false);
+    const user = await this.usersRepo.setBanned(targetId, false);
     await this.auditService.log({
-      action: 'USER_UNBAN',
+      action: AuditAction.USER_UNBAN,
       actorId,
       targetId,
-      payload: {} as Prisma.InputJsonValue,
+      payload: {},
     });
-    return user;
-  }
-
-  // ─── Grant Ceiling — Update Permissions ───────────────────────────────────
-
-  async updatePermissions(
-    actorId: string,
-    targetUserId: string,
-    dto: UpdatePermissionsDto,
-  ): Promise<UserResponse> {
-    if (actorId === targetUserId) {
-      throw new BadRequestException('You cannot modify your own permissions.');
-    }
-
-    const actor = await this.prisma.user.findUnique({
-      where: { id: actorId },
-      include: { permissions: true },
-    });
-    if (!actor) throw new NotFoundException('Actor not found.');
-
-    const actorAtoms = new Set(actor.permissions.map((p) => p.atom));
-
-    const forbidden = dto.atoms.filter((atom) => !actorAtoms.has(atom));
-    if (forbidden.length > 0) {
-      throw new ForbiddenException(
-        `Grant ceiling violation: you do not possess [${forbidden.join(', ')}].`,
-      );
-    }
-
-    const permissionRecords = await this.prisma.permission.findMany({
-      where: { atom: { in: dto.atoms } },
-    });
-
-    const unknown = dto.atoms.filter(
-      (a) => !permissionRecords.map((p) => p.atom).includes(a),
-    );
-    if (unknown.length > 0) {
-      throw new BadRequestException(
-        `Unknown permission atoms: [${unknown.join(', ')}].`,
-      );
-    }
-
-    const target = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
-      include: { permissions: true },
-    });
-    if (!target) throw new NotFoundException(`User ${targetUserId} not found.`);
-    const previousAtoms = target.permissions.map((p) => p.atom);
-
-    const updated = await this.prisma.user.update({
-      where: { id: targetUserId },
-      data: {
-        permissions: {
-          set: permissionRecords.map((p) => ({ id: p.id })),
-        },
-      },
-      include: this.includePerms,
-    });
-
-    await this.auditService.log({
-      action: 'PERMISSION_GRANT',
-      actorId,
-      targetId: targetUserId,
-      payload: {
-        before: previousAtoms,
-        after: dto.atoms,
-        added: dto.atoms.filter((a) => !previousAtoms.includes(a)),
-        removed: previousAtoms.filter((a) => !dto.atoms.includes(a)),
-      } as Prisma.InputJsonValue,
-    });
-
-    return this.mapUser(updated);
-  }
-
-  // ─── Private helpers ───────────────────────────────────────────────────────
-
-  private async _setActive(id: string, isActive: boolean): Promise<UserResponse> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException(`User ${id} not found.`);
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: { isActive },
-      include: this.includePerms,
-    });
-    return this.mapUser(updated);
-  }
-
-  private async _setBanned(id: string, isBanned: boolean): Promise<UserResponse> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException(`User ${id} not found.`);
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: { isBanned },
-      include: this.includePerms,
-    });
-    return this.mapUser(updated);
+    return mapUser(user);
   }
 }

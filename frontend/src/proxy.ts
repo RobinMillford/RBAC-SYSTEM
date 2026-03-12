@@ -74,24 +74,32 @@ export function proxy(request: NextRequest) {
 
   // Read the access token from the short-lived readable cookie set by the frontend
   const accessToken = request.cookies.get('access-token')?.value;
+  // Long-lived session marker that persists for the full refresh-token lifetime (7 days).
+  // If present without a valid access-token, the client-side refresh will renew the session.
+  const authSession = request.cookies.get('auth_session')?.value;
 
-  if (!accessToken) {
-    // Not authenticated – redirect to login
+  if (!accessToken && !authSession) {
+    // Neither cookie present — definitely not logged in
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  const claims = decodeJwtPayload(accessToken);
+  if (!accessToken || !decodeJwtPayload(accessToken)) {
+    // Access token is missing or expired, but auth_session exists.
+    // Let the request through — the client-side useEffect will call /auth/refresh
+    // to obtain a fresh token without forcing an unnecessary redirect to /login.
+    if (authSession) return NextResponse.next();
 
-  if (!claims) {
-    // Token invalid or expired – clear cookie and redirect to login
+    // No session marker either — redirect to login and clean up stale cookie
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
     const response = NextResponse.redirect(loginUrl);
     response.cookies.delete('access-token');
     return response;
   }
+
+  const claims = decodeJwtPayload(accessToken)!;
 
   // Find the most specific matching route rule (dashboard routes only)
   if (pathname.startsWith('/dashboard')) {

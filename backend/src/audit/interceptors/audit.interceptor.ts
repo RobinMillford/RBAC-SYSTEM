@@ -4,18 +4,11 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { Observable, tap } from 'rxjs';
 import { AuditService } from '../audit.service';
+import { AuditAction } from '../../common/enums/audit-action.enum';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
-/**
- * Attach this interceptor to any controller method that modifies permissions.
- * It automatically logs actorId, targetId, and the response payload.
- *
- * Usage:
- *   @UseInterceptors(AuditInterceptor)
- */
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   constructor(private readonly auditService: AuditService) {}
@@ -34,13 +27,13 @@ export class AuditInterceptor implements NestInterceptor {
         if (!actor) return;
 
         await this.auditService.log({
-          action: 'PERMISSION_CHANGE',
+          action: AuditAction.PERMISSION_CHANGE,
           actorId: actor.sub,
           targetId,
           payload: {
             request: requestPayload,
-            response: responseData,
-          } as Prisma.InputJsonValue,
+            response: responseData as Record<string, unknown>,
+          },
         });
       }),
     );

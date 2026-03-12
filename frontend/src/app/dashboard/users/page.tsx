@@ -134,7 +134,7 @@ function CreateUserModal({ token, onClose, onCreated }: CreateModalProps) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function UsersPage() {
-  const { accessToken, hasPermission } = useAuth();
+  const { accessToken, isLoading: authLoading, hasPermission } = useAuth();
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -146,9 +146,10 @@ export default function UsersPage() {
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
-      const { data } = await api.get<UserResponse[]>('/users', { headers });
-      setUsers(data);
+      const { data } = await api.get<{ data: UserResponse[]; total: number }>('/users', { headers });
+      setUsers(data.data);
     } catch {
       setError('Failed to load users.');
     } finally {
@@ -157,7 +158,10 @@ export default function UsersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  useEffect(() => { void loadUsers(); }, [loadUsers]);
+  useEffect(() => {
+    if (authLoading || !accessToken) return;
+    void loadUsers();
+  }, [loadUsers, authLoading, accessToken]);
 
   const action = async (userId: string, endpoint: string) => {
     setActionLoading(userId + endpoint);

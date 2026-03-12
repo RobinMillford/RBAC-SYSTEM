@@ -45,7 +45,7 @@ function PayloadCell({ payload }: { payload: Record<string, unknown> }) {
 }
 
 export default function AuditPage() {
-  const { accessToken } = useAuth();
+  const { accessToken, isLoading: authLoading } = useAuth();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -70,7 +70,10 @@ export default function AuditPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  useEffect(() => { void loadLogs(page); }, [loadLogs, page]);
+  useEffect(() => {
+    if (authLoading || !accessToken) return;
+    void loadLogs(page);
+  }, [loadLogs, page, authLoading, accessToken]);
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 

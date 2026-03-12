@@ -17,7 +17,7 @@ const ATOM_GROUPS: { label: string; atoms: string[] }[] = [
 ];
 
 export default function PermissionsPage() {
-  const { accessToken, user: currentUser, hasPermission } = useAuth();
+  const { accessToken, isLoading: authLoading, user: currentUser, hasPermission } = useAuth();
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null);
   const [selectedAtoms, setSelectedAtoms] = useState<Set<string>>(new Set());
@@ -30,9 +30,10 @@ export default function PermissionsPage() {
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
-      const { data } = await api.get<UserResponse[]>('/users', { headers });
-      setUsers(data);
+      const { data } = await api.get<{ data: UserResponse[]; total: number }>('/users', { headers });
+      setUsers(data.data);
     } catch {
       setError('Failed to load users.');
     } finally {
@@ -41,7 +42,10 @@ export default function PermissionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  useEffect(() => { void loadUsers(); }, [loadUsers]);
+  useEffect(() => {
+    if (authLoading || !accessToken) return;
+    void loadUsers();
+  }, [loadUsers, authLoading, accessToken]);
 
   const selectUser = (u: UserResponse) => {
     setSelectedUser(u);

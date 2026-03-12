@@ -6,4 +6,21 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+/**
+ * Transparently unwrap the standard backend response envelope:
+ *   { success: true, data: <actual payload>, timestamp: '...' }
+ * so that all existing call-sites continue to work via `response.data.<field>`.
+ */
+api.interceptors.response.use((response) => {
+  if (
+    response.data !== null &&
+    typeof response.data === 'object' &&
+    response.data.success === true &&
+    'data' in response.data
+  ) {
+    response.data = response.data.data;
+  }
+  return response;
+});
+
 export default api;

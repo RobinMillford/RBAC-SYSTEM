@@ -1,16 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditAction } from '../common/enums/audit-action.enum';
 
 export interface AuditLogPayload {
-  action: string;
+  action: AuditAction | string;
   actorId: string;
   targetId?: string;
-  payload: Prisma.InputJsonValue;
+  payload: Record<string, unknown>;
 }
 
 @Injectable()
 export class AuditService {
+  private readonly logger = new Logger(AuditService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async log(entry: AuditLogPayload): Promise<void> {
@@ -19,9 +22,12 @@ export class AuditService {
         action: entry.action,
         actorId: entry.actorId,
         targetId: entry.targetId,
-        payload: entry.payload,
+        payload: entry.payload as Prisma.InputJsonValue,
       },
     });
+    this.logger.debug(
+      `Audit [${entry.action}] by ${entry.actorId}${entry.targetId ? ` → ${entry.targetId}` : ''}`,
+    );
   }
 
   async findAll(page = 1, limit = 50) {

@@ -13,6 +13,9 @@ export class PrismaService
       connectionString:
         process.env.DATABASE_URL ??
         'postgresql://postgres:rbacs123@localhost:5432/postgres',
+      ssl: process.env.DATABASE_URL?.includes('neon.tech')
+        ? { rejectUnauthorized: false }
+        : false,
     });
     super({ adapter: new PrismaPg(pool) });
   }
