@@ -18,6 +18,7 @@ import { LoginDto } from './dto/login.dto';
 
 const REFRESH_COOKIE = 'refresh_token';
 const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 @Controller('auth')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
@@ -36,8 +37,8 @@ export class AuthController {
 
     res.cookie(REFRESH_COOKIE, refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: IS_PROD,
+      sameSite: IS_PROD ? 'none' : 'lax',
       maxAge: COOKIE_MAX_AGE_MS,
       path: '/api/auth/refresh',
     });
@@ -62,8 +63,8 @@ export class AuthController {
     // Rotate: set the new refresh token cookie
     res.cookie(REFRESH_COOKIE, newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: IS_PROD,
+      sameSite: IS_PROD ? 'none' : 'lax',
       maxAge: COOKIE_MAX_AGE_MS,
       path: '/api/auth/refresh',
     });
@@ -81,7 +82,11 @@ export class AuthController {
     if (refreshToken) {
       await this.authService.logout(refreshToken);
     }
-    res.clearCookie(REFRESH_COOKIE, { path: '/api/auth/refresh' });
+    res.clearCookie(REFRESH_COOKIE, {
+      path: '/api/auth/refresh',
+      secure: IS_PROD,
+      sameSite: IS_PROD ? 'none' : 'lax',
+    });
   }
 }
 
